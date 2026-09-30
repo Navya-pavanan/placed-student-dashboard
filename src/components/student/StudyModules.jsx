@@ -179,54 +179,6 @@ const StudyModules = () => {
         </div>
       </div>
 
-      {/* S-1 SKILL GAP RECOMMENDATIONS BANNER */}
-      <div style={{ 
-        background: 'linear-gradient(135deg, #EFF6FF 0%, #EEF2FF 100%)', 
-        border: '1.5px solid #BFDBFE', 
-        borderRadius: '12px', 
-        padding: '16px 20px', 
-        marginBottom: '24px',
-        boxShadow: '0 1px 3px rgba(37, 99, 235, 0.08)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: '280px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#2563EB', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                <span className="sim-badge" style={{ background: '#2563EB', color: '#fff', fontSize: '11px', padding: '2px 8px' }}>
-                  S-1 Skill Gap Intelligence
-                </span>
-                <span style={{ fontSize: '12px', color: '#1E40AF', fontWeight: 600 }}>
-                  Automated Diagnostic Feed
-                </span>
-              </div>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1E3A8A', margin: '0 0 4px 0', lineHeight: 1.3 }}>
-                Recommended Study Module: Quantitative Aptitude — Percentages & Data Interpretation
-              </h3>
-              <p style={{ fontSize: '12.5px', color: '#1E40AF', margin: 0, lineHeight: 1.4 }}>
-                Your S-1 Readiness Audit identified a <strong>-12% deficit in Quantitative Aptitude</strong>. Completing this targeted module will boost your readiness score up to <strong>78/100</strong>.
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
-            <button 
-              className="btn btn-primary btn-sm" 
-              onClick={() => {
-                const quantMod = modules.find(m => m.subjectId === 'quant' || m.id === 'module-quant');
-                if (quantMod) setActiveDocument(quantMod);
-              }} 
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              <Play size={12} style={{ marginRight: '4px' }} /> View Recommended Document
-            </button>
-            <span style={{ fontSize: '11px', color: '#3B82F6', fontWeight: 600 }}>
-              Consuming S-1 Diagnostic Feed
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* UPLOADED STUDY MATERIALS TABLE CARD (EXACT MATCH WITH PHOTO 1) */}
       <div className="study-materials-card">
