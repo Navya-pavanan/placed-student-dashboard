@@ -38,19 +38,47 @@ export const studyModuleService = {
         return [];
       }
 
+      const formatFileSize = (bytes) => {
+        if (!bytes || bytes === 0) return '—';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      };
+
       // Database has live records
-      const mapped = data.map(m => ({
-        id: m.id,
-        title: m.title,
-        subject: m.subject,
-        subjectId: m.subject_id,
-        description: m.description,
-        s1GapTag: m.s1_gap_tag,
-        isRecommended: m.is_recommended,
-        recommendationReason: m.recommendation_reason,
-        createdAt: m.created_at,
-        fileDetails: m.file_details || '—'
-      }));
+      const mapped = data.map(m => {
+        let meta = null;
+        if (typeof m.description === 'string' && m.description.trim().startsWith('{')) {
+          try {
+            meta = JSON.parse(m.description);
+          } catch (_) {}
+        }
+
+        const fileData = meta?.file_data || m.file_data || null;
+        const fileName = meta?.file_name || m.file_name || null;
+        const fileType = meta?.file_type || m.file_type || null;
+        const fileSize = meta?.file_size || m.file_size || 0;
+        const humanDesc = meta?.human_description || meta?.notes || (!meta ? m.description : '');
+
+        return {
+          id: m.id,
+          title: m.title,
+          subject: m.subject || meta?.main_topic || 'General',
+          subjectId: m.subject_id,
+          description: humanDesc,
+          rawDescription: m.description,
+          fileData,
+          fileName,
+          fileType,
+          fileSize,
+          fileDetails: m.file_details || (fileSize ? formatFileSize(fileSize) : '—'),
+          s1GapTag: m.s1_gap_tag,
+          isRecommended: m.is_recommended,
+          recommendationReason: m.recommendation_reason,
+          createdAt: m.created_at
+        };
+      });
 
       return this._enrichWithDeficits(mapped);
     } catch (err) {

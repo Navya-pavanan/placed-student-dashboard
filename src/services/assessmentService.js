@@ -45,18 +45,93 @@ export const assessmentService = {
       async () => {
         const { data, error } = await supabase
           .from('student_assessments')
-          .select('*');
+          .select('*')
+          .order('created_at', { ascending: false });
+
         if (error) {
           console.error('Error fetching student_assessments:', error);
           throw error;
         }
-        if (!data || !Array.isArray(data)) return [];
-        return data.map((item) => ({
-          ...item,
-          questionCount: item.questionCount ?? item.question_count,
-          statusBadge: item.statusBadge ?? item.status_badge,
-          isActive: item.isActive !== undefined ? item.isActive : (item.is_active !== undefined ? item.is_active : true)
-        }));
+
+        let customLocal = [];
+        try {
+          customLocal = JSON.parse(localStorage.getItem('placed_custom_assessments') || '[]');
+        } catch (e) {}
+
+        const combinedList = [...(data || [])];
+
+        // Merge any local custom assessments not yet synced
+        customLocal.forEach(localItem => {
+          if (!combinedList.some(item => item.id === localItem.id)) {
+            combinedList.unshift({
+              id: localItem.id,
+              title: localItem.name,
+              description: JSON.stringify({
+                assessment_type: localItem.assessmentType || 'Practice/Simulation',
+                topic: localItem.type || 'Aptitude Test',
+                start_date: localItem.startDate,
+                end_date: localItem.endDate,
+                is_infinity: localItem.isInfinity,
+                questions: localItem.questions
+              }),
+              duration: `${localItem.duration || 60} mins`,
+              questionCount: localItem.questionCount || `${localItem.questions?.length || 0} Questions`,
+              status: 'pending',
+              statusBadge: 'Not Attempted',
+              isActive: true,
+              created_at: new Date().toISOString()
+            });
+          }
+        });
+
+        const now = Date.now();
+
+        return combinedList.map((item) => {
+          let meta = {};
+          let cleanDesc = item.description || '';
+
+          if (item.description && typeof item.description === 'string' && item.description.startsWith('{')) {
+            try {
+              meta = JSON.parse(item.description);
+              cleanDesc = `${meta.topic || 'Assessment'} • ${meta.assessment_type || 'Test'}`;
+            } catch (e) {
+              meta = {};
+            }
+          }
+
+          const assType = meta.assessment_type || item.assessment_type || (item.title?.toLowerCase().includes('practice') ? 'Practice/Simulation' : 'Assessment');
+          const topic = meta.topic || item.category || item.type || 'Aptitude Test';
+          const startDate = meta.start_date || item.start_date || null;
+          const endDate = meta.end_date || item.end_date || null;
+          const isInfinity = meta.is_infinity ?? item.is_infinity ?? (!endDate);
+
+          const startMs = startDate ? new Date(startDate).getTime() : null;
+          const endMs = endDate ? new Date(endDate).getTime() : null;
+
+          const isUpcoming = Boolean(startMs && now < startMs);
+          const isExpired = Boolean(!isInfinity && endMs && now > endMs);
+          const isLive = !isUpcoming && !isExpired;
+
+          return {
+            ...item,
+            title: item.title || item.name,
+            cleanDescription: cleanDesc,
+            assessmentType: assType,
+            topic: topic,
+            startDate: startDate,
+            endDate: endDate,
+            isInfinity: isInfinity,
+            isUpcoming: isUpcoming,
+            isExpired: isExpired,
+            isLive: isLive,
+            sections: meta.sections || null,
+            codingProblems: meta.codingProblems || meta.sections?.coding || [],
+            questions: meta.questions || (meta.sections ? [...(meta.sections.aptitude || []), ...(meta.sections.communication || [])] : []),
+            questionCount: item.questionCount ?? item.question_count ?? (meta.questions ? `${meta.questions.length} Items` : '20 Questions'),
+            statusBadge: isUpcoming ? 'Locked (Upcoming)' : isExpired ? 'Expired' : (item.statusBadge ?? item.status_badge ?? 'Available'),
+            isActive: item.isActive !== undefined ? item.isActive : (item.is_active !== undefined ? item.is_active : true)
+          };
+        });
       },
       []
     );

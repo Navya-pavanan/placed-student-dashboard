@@ -1,6 +1,7 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { Award, FileText, TrendingUp, Calendar, ClipboardCheck, Minus, Briefcase, BarChart2, ArrowRight, PlayCircle, Columns3, Edit3, Video, User, PlusCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../utils/navigation';
 import { studentService } from '../../services/studentService';
 import { readinessService } from '../../services/readinessService';
 import { opportunityService } from '../../services/opportunityService';

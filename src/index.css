@@ -38,17 +38,89 @@
   --topbar-h:       64px;
   --transition:     0.22s cubic-bezier(0.4,0,0.2,1);
   --transition-slow:0.35s cubic-bezier(0.4,0,0.2,1);
+
+  /* ── Typography Direction & Rules ── */
+  --font-heading:   'Inter', 'Satoshi', 'General Sans', system-ui, -apple-system, sans-serif;
+  --font-body:      'Inter', 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-display:   'Poppins', 'Inter', sans-serif;
+  --font-mono:      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-html { font-size: 14px; scroll-behavior: smooth; color-scheme: light; }
+html { 
+  font-size: 14px; 
+  scroll-behavior: smooth; 
+  color-scheme: light; 
+}
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography Hierarchy ── */
+h1, .hero-title, .page-header h1 {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+h2, .section-title {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+h3, .card-title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+p, .body-text {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* Minimal paragraph clutter: subtitle styling */
+.page-header p, .subtitle, .hero-subtitle {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 0;
+  max-width: 68ch;
+}
+
+/* Block letter tags, pills, and badges using Poppins */
+.badge, .pill, .chip, .stat-label, .tag, .tab-label-block {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 /* ── Scrollbar ── */

@@ -1,6 +1,7 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { Users, Play, Clock, User, Calculator, Terminal, MessageSquare, Brain, Search, X, CheckCircle } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from '../../utils/navigation';
 import { classService } from '../../services/classService';
 
 const ClassesModule = () => {

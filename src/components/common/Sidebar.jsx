@@ -1,6 +1,7 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Award, ClipboardCheck, TrendingUp, MonitorPlay, FileText, Briefcase, Video, User, LogOut, PanelLeftClose, PanelLeftOpen, Users, BookOpen, ArrowLeft } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink } from '../../utils/navigation';
 import { studentService } from '../../services/studentService';
 import { readinessService } from '../../services/readinessService';
 import { classService } from '../../services/classService';

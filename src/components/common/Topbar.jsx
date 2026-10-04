@@ -1,6 +1,7 @@
+'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Bell, Settings, X, ArrowRight, LayoutDashboard, Award, ClipboardCheck, TrendingUp, MonitorPlay, Users, BookOpen, FileText, Briefcase, Video, User, Menu, LogOut } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../../utils/navigation';
 import { studentService } from '../../services/studentService';
 import { opportunityService } from '../../services/opportunityService';
 import { classService } from '../../services/classService';

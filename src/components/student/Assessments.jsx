@@ -1,17 +1,33 @@
-import React, { useState } from 'react';
-import { ClipboardCheck, Lock, CheckCircle2, PlayCircle, Award, FileText, RotateCcw, Clock, ArrowRight, CheckCircle, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  ClipboardCheck,
+  Lock,
+  CheckCircle2,
+  PlayCircle,
+  Award,
+  FileText,
+  RotateCcw,
+  Clock,
+  ArrowRight,
+  CheckCircle,
+  AlertTriangle,
+  Calendar,
+  Terminal,
+  FileQuestion,
+  Sparkles
+} from 'lucide-react';
 import GenericTestUI from './simulation/GenericTestUI';
 import CodingRoundUI from './simulation/CodingRoundUI';
 import HRInterviewUI from './simulation/HRInterviewUI';
 import TestResultUI from './simulation/TestResultUI';
+import MockTestRunnerUI from './simulation/MockTestRunnerUI';
+import { assessmentService } from '../../services/assessmentService';
 import './AssessmentTest.css';
 
 /*
   ASSESSMENTS:
-  Complete / Overall Placement Assessment module.
-  Strict sequential multi-stage evaluation:
-  Stage 01 (Aptitude) → Stage 02 (Technical) → Stage 03 (Coding) → Stage 04 (HR Interview) → Final Report.
-  Stages remain locked until previous stage is completed.
+  1. Scheduled Official Assessments (created by Admin) with strict time-window locking.
+  2. Sequential 4-Stage Diagnostic Benchmark Pipeline.
 */
 
 const STAGES = [
@@ -58,9 +74,13 @@ const STAGES = [
 ];
 
 const Assessments = () => {
-  const [view, setView] = useState('overview');
+  const [view, setView] = useState('overview'); // 'overview' | 'test-custom' | 'test-aptitude' | ... | 'final-report'
+  const [scheduledAssessments, setScheduledAssessments] = useState([]);
+  const [loadingAssessments, setLoadingAssessments] = useState(true);
+  const [activeCustomAss, setActiveCustomAss] = useState(null);
+  const [customResult, setCustomResult] = useState(null);
 
-  // Completed stages: 0 = none, 1 = aptitude completed, 2 = technical, 3 = coding, 4 = all done
+  // Completed stages for 4-stage track
   const [completedStages, setCompletedStages] = useState(() => {
     try {
       const saved = localStorage.getItem('placed_assessment_completed_stages');
@@ -79,20 +99,53 @@ const Assessments = () => {
     }
   });
 
+  // Fetch official scheduled assessments from Supabase
+  const loadAssessments = async () => {
+    try {
+      setLoadingAssessments(true);
+      const all = await assessmentService.getAssessments();
+      // Filter strictly for Type === 'Assessment'
+      const onlyAssessments = all.filter(a => a.assessmentType === 'Assessment');
+      setScheduledAssessments(onlyAssessments);
+    } catch (err) {
+      console.error('Failed to load scheduled assessments:', err);
+    } finally {
+      setLoadingAssessments(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAssessments();
+  }, []);
+
   const progressPercentage = Math.round((completedStages / 4) * 100);
+
+  // ─── CUSTOM SCHEDULED ASSESSMENT LAUNCH ──────────────────
+  const handleStartCustomAssessment = (ass) => {
+    if (ass.isUpcoming) {
+      alert(`This assessment is scheduled for ${ass.startDate ? new Date(ass.startDate).toLocaleString() : 'a future date'} and is currently locked.`);
+      return;
+    }
+    if (ass.isExpired) {
+      alert('This assessment has concluded.');
+      return;
+    }
+
+    setActiveCustomAss(ass);
+    setView('test-custom');
+  };
+
+  const handleCustomComplete = (results) => {
+    setCustomResult(results);
+    setView('result-custom');
+  };
 
   // ─── STRICT STAGE ACCESS ENFORCEMENT ─────────────────────
   const handleStartStage = (stageId) => {
-    // Cannot start if previous stages are not completed
     if (stageId < 1 || stageId > 4) return;
-    if (stageId > completedStages + 1) {
-      // Direct access bypass prevented
-      return;
-    }
+    if (stageId > completedStages + 1) return;
     const stage = STAGES.find((s) => s.id === stageId);
-    if (stage) {
-      setView(`test-${stage.key}`);
-    }
+    if (stage) setView(`test-${stage.key}`);
   };
 
   const handleStartAssessment = () => {
@@ -147,7 +200,68 @@ const Assessments = () => {
     setView('overview');
   };
 
-  // ─── RENDER TEST VIEWS ────────────────────────────────────
+  // ─── RENDER ACTIVE CUSTOM ASSESSMENT ─────────────────────
+  if (view === 'test-custom' && activeCustomAss) {
+    const isMock = activeCustomAss.topic === 'Mock Test';
+    const isCoding = activeCustomAss.topic === 'Coding Challenge';
+    const duration = parseInt(activeCustomAss.duration, 10) || 60;
+
+    if (isMock) {
+      return (
+        <MockTestRunnerUI
+          assessment={activeCustomAss}
+          onComplete={handleCustomComplete}
+          onExit={() => { setActiveCustomAss(null); setView('overview'); }}
+        />
+      );
+    }
+
+    if (isCoding) {
+      return (
+        <main className="dashboard-content" style={{ padding: 0 }}>
+          <CodingRoundUI
+            title={activeCustomAss.title}
+            durationMinutes={duration}
+            customProblems={activeCustomAss.codingProblems?.length ? activeCustomAss.codingProblems : activeCustomAss.questions}
+            onComplete={handleCustomComplete}
+            onExit={() => { setActiveCustomAss(null); setView('overview'); }}
+          />
+        </main>
+      );
+    }
+
+    return (
+      <main className="dashboard-content">
+        <GenericTestUI
+          stage={activeCustomAss.topic?.toLowerCase().includes('comm') ? 'communication' : 'aptitude'}
+          stageLabel={activeCustomAss.title}
+          questionCount={activeCustomAss.questions?.length || 20}
+          timeLimitMinutes={duration}
+          customQuestions={activeCustomAss.questions}
+          onComplete={handleCustomComplete}
+          onExit={() => { setActiveCustomAss(null); setView('overview'); }}
+        />
+      </main>
+    );
+  }
+
+  // ─── RENDER CUSTOM RESULT VIEW ───────────────────────────
+  if (view === 'result-custom' && activeCustomAss && customResult) {
+    return (
+      <main className="dashboard-content">
+        <TestResultUI
+          title={activeCustomAss.title}
+          subtitle="Official Assessment Completed"
+          continueLabel="Return to Assessments Overview"
+          results={customResult}
+          onContinue={() => { setActiveCustomAss(null); setCustomResult(null); setView('overview'); }}
+          onRetake={() => handleStartCustomAssessment(activeCustomAss)}
+        />
+      </main>
+    );
+  }
+
+  // ─── RENDER STANDARD TEST VIEWS ───────────────────────────
   if (view === 'test-aptitude') {
     return (
       <main className="dashboard-content">
@@ -164,7 +278,6 @@ const Assessments = () => {
   }
 
   if (view === 'test-technical') {
-    // Prevent direct bypass if Stage 1 not completed
     if (completedStages < 1) {
       return (
         <main className="dashboard-content">
@@ -197,7 +310,6 @@ const Assessments = () => {
   }
 
   if (view === 'test-coding') {
-    // Prevent direct bypass if Stage 2 not completed
     if (completedStages < 2) {
       return (
         <main className="dashboard-content">
@@ -216,7 +328,7 @@ const Assessments = () => {
     }
 
     return (
-      <main className="dashboard-content">
+      <main className="dashboard-content" style={{ padding: 0 }}>
         <CodingRoundUI
           onComplete={(r) => handleStageComplete('coding', r)}
           onExit={() => setView('overview')}
@@ -226,7 +338,6 @@ const Assessments = () => {
   }
 
   if (view === 'test-hr') {
-    // Prevent direct bypass if Stage 3 not completed
     if (completedStages < 3) {
       return (
         <main className="dashboard-content">
@@ -254,7 +365,7 @@ const Assessments = () => {
     );
   }
 
-  // ─── RENDER RESULT VIEWS ──────────────────────────────────
+  // ─── RENDER STANDARD RESULT VIEWS ─────────────────────────
   if (view === 'result-aptitude') {
     return (
       <main className="dashboard-content">
@@ -311,7 +422,7 @@ const Assessments = () => {
     );
   }
 
-  // ─── FINAL REPORT (OVERALL READINESS) ─────────────────────
+  // ─── FINAL REPORT VIEW ────────────────────────────────────
   if (view === 'final-report') {
     const apt = stageResults.aptitude || {};
     const tech = stageResults.technical || {};
@@ -323,7 +434,6 @@ const Assessments = () => {
       <main className="dashboard-content">
         <div className="test-wrapper">
           <div className="results-card">
-            {/* Banner */}
             <div className="results-banner">
               <Award size={40} style={{ marginBottom: '4px' }} />
               <div style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.5px', textTransform: 'uppercase', opacity: 0.9 }}>
@@ -338,7 +448,6 @@ const Assessments = () => {
               </div>
             </div>
 
-            {/* Individual Score Stats Chips */}
             <div className="results-stats-row">
               <div className="result-stat-chip">
                 <span className="result-stat-num" style={{ color: 'var(--primary)' }}>{apt.percentage?.toFixed(1) || 0}%</span>
@@ -358,11 +467,9 @@ const Assessments = () => {
               </div>
             </div>
 
-            {/* Review Section */}
             <div className="review-section">
               <h3 className="review-section-title">Assessment Feedback & Next Steps</h3>
 
-              {/* Strengths Card */}
               <div className="review-item-card">
                 <div className="review-item-header">
                   <span className="review-item-qnum" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -378,7 +485,6 @@ const Assessments = () => {
                 </div>
               </div>
 
-              {/* Improvements Card */}
               <div className="review-item-card">
                 <div className="review-item-header">
                   <span className="review-item-qnum" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -394,18 +500,16 @@ const Assessments = () => {
                 </div>
               </div>
 
-              {/* Recommendation Box */}
               <div className="review-explanation-box" style={{ marginTop: '16px' }}>
                 <strong>Recommendation: </strong>
                 {overallPercentage >= 80
                   ? 'Outstanding placement readiness! You meet the qualification benchmarks for top-tier campus recruitment drives.'
                   : overallPercentage >= 60
-                  ? 'Good foundation! Target the specific weak areas highlighted above using the Practice & Simulations module.'
-                  : 'Focus on strengthening fundamentals. Use the Study Modules and Practice & Simulations tests to build mastery.'}
+                    ? 'Good foundation! Target the specific weak areas highlighted above using the Practice & Simulations module.'
+                    : 'Focus on strengthening fundamentals. Use the Study Modules and Practice & Simulations tests to build mastery.'}
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button className="btn btn-outline" onClick={resetAssessment}>
                 <RotateCcw size={14} /> Reset & Retake Assessment
@@ -420,27 +524,147 @@ const Assessments = () => {
     );
   }
 
-  // ─── OVERVIEW VIEW (SEQUENTIAL ASSESSMENT PIPELINE) ───────
+  // ─── OVERVIEW VIEW ────────────────────────────────────────
   return (
     <main className="dashboard-content">
       <div className="view-header">
         <div>
           <h1 className="view-title">
-            <ClipboardCheck size={24} style={{ marginRight: '10px' }} /> Assessments & Diagnostic Tests
+            <ClipboardCheck size={24} style={{ marginRight: '10px' }} /> Scheduled Assessments & Evaluations
           </h1>
-          <p className="view-sub">Sequential multi-stage evaluation to benchmark your placement readiness.</p>
+          <p className="view-sub">Official campus recruitment evaluations and scheduled benchmark assessments.</p>
         </div>
+        <button className="btn btn-outline btn-sm" onClick={loadAssessments}>
+          <RotateCcw size={14} /> Refresh Assessments
+        </button>
       </div>
 
       <div className="test-wrapper">
-        <div className="instructions-card">
+        {/* SECTION 1: OFFICIAL SCHEDULED ASSESSMENTS FROM ADMIN */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div>
+              <h2 style={{ fontSize: '17px', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text)' }}>
+                <Calendar size={18} color="var(--primary)" /> Scheduled Campus Assessments ({scheduledAssessments.length})
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                Official tests unlocked strictly during the scheduled assessment window.
+              </p>
+            </div>
+          </div>
+
+          {loadingAssessments ? (
+            <div style={{ padding: '30px', textAlign: 'center', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+              Loading scheduled assessments from Supabase...
+            </div>
+          ) : scheduledAssessments.length === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center', background: 'var(--surface-alt, #F8FAFC)', borderRadius: '12px', border: '1.5px dashed var(--border-light)' }}>
+              <FileQuestion size={32} color="var(--text-muted)" style={{ marginBottom: '8px' }} />
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>No Scheduled Assessments Active</div>
+              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                When your administrator creates a scheduled assessment, it will appear here with its scheduled date and time window.
+              </p>
+            </div>
+          ) : (
+            <div className="simulations-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+              {scheduledAssessments.map((ass) => {
+                const isCoding = ass.topic === 'Coding Challenge';
+                const isUpcoming = ass.isUpcoming;
+                const isExpired = ass.isExpired;
+                const isLive = ass.isLive;
+
+                let statusColor = { background: '#EFF6FF', color: '#1E40AF' };
+                let badgeLabel = '🟢 Live Assessment';
+
+                if (isUpcoming) {
+                  statusColor = { background: '#FEF3C7', color: '#92400E' };
+                  badgeLabel = ass.startDate ? `🔒 Opens ${new Date(ass.startDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '🔒 Upcoming';
+                } else if (isExpired) {
+                  statusColor = { background: '#F1F5F9', color: '#64748B' };
+                  badgeLabel = 'Concluded';
+                }
+
+                return (
+                  <div
+                    key={ass.id}
+                    className={`sim-card ${isLive ? 'active' : ''}`}
+                    style={{ opacity: isExpired ? 0.65 : 1, border: isLive ? '1.5px solid var(--primary)' : '1px solid var(--border-light)' }}
+                  >
+                    <div className="sim-header">
+                      <span className="sim-badge" style={statusColor}>
+                        {badgeLabel}
+                      </span>
+                      <span className="sim-time">
+                        <Clock size={14} style={{ marginRight: '4px' }} /> {ass.duration || '60 mins'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0 8px' }}>
+                      {isCoding ? (
+                        <span style={{ fontSize: '11px', fontWeight: '700', background: '#F0FDF4', color: '#16A34A', padding: '2px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Terminal size={12} /> LeetCode IDE
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: '700', background: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <FileText size={12} /> 4-Option MCQ
+                        </span>
+                      )}
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)' }}>
+                        • {ass.topic || 'Assessment'}
+                      </span>
+                    </div>
+
+                    <h4 className="sim-title" style={{ fontSize: '16px' }}>{ass.title}</h4>
+                    <p className="sim-sub">{ass.cleanDescription || 'Standardized campus assessment evaluating candidate competency.'}</p>
+
+                    <div className="sim-footer" style={{ minHeight: '36px' }}>
+                      <span className="sim-score">
+                        {ass.questionCount}
+                      </span>
+
+                      {isLive ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleStartCustomAssessment(ass)}
+                        >
+                          Start Assessment <ArrowRight size={14} style={{ marginLeft: '4px' }} />
+                        </button>
+                      ) : isUpcoming ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          disabled
+                          style={{ opacity: 0.6, cursor: 'not-allowed', background: '#FEF3C7', borderColor: '#FDE68A', color: '#92400E' }}
+                        >
+                          <Lock size={13} style={{ marginRight: '4px' }} /> Locked
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          disabled
+                          style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                        >
+                          Expired
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 2: SEQUENTIAL 4-STAGE BENCHMARK PIPELINE */}
+        <div className="instructions-card" style={{ marginTop: '20px' }}>
           <div className="instructions-header">
             <h2 className="instructions-title" style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>
-              <Award size={22} color="var(--primary)" /> Campus Placement Assessment
+              <Sparkles size={22} color="var(--primary)" /> Campus Placement Assessment
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13.5px', margin: '4px 0 0 0' }}>
-              Complete the recruitment stages sequentially to unlock subsequent rounds and generate your Placement Readiness Report.
-            </p>
+              Complete the recruitment stages sequentially to unlock subsequent rounds and generate your Placement Readiness Report.            </p>
           </div>
 
           {completedStages > 0 && (
@@ -455,18 +679,15 @@ const Assessments = () => {
           <div className="instructions-actions" style={{ display: 'flex', gap: '10px', marginTop: completedStages > 0 ? '12px' : '0' }}>
             {completedStages === 0 ? (
               <button className="btn btn-primary" onClick={handleStartAssessment}>
-                Start Assessment <PlayCircle size={14} />
+                Start Diagnostic Track <PlayCircle size={14} />
               </button>
             ) : completedStages < 4 ? (
               <>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleStartAssessment}
-                >
-                  Continue Assessment: Stage 0{completedStages + 1} ({STAGES[completedStages].title}) <ArrowRight size={14} />
+                <button className="btn btn-primary" onClick={handleStartAssessment}>
+                  Continue: Stage 0{completedStages + 1} ({STAGES[completedStages].title}) <ArrowRight size={14} />
                 </button>
                 <button className="btn btn-outline" onClick={resetAssessment}>
-                  <RotateCcw size={14} /> Reset Assessment
+                  <RotateCcw size={14} /> Reset Track
                 </button>
               </>
             ) : (
@@ -475,7 +696,7 @@ const Assessments = () => {
                   <Award size={14} /> View Readiness Report
                 </button>
                 <button className="btn btn-outline" onClick={resetAssessment}>
-                  <RotateCcw size={14} /> Reset Assessment
+                  <RotateCcw size={14} /> Reset Track
                 </button>
               </>
             )}

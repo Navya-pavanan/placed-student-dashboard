@@ -4,12 +4,12 @@ import { simulationService } from '../../../services/simulationService';
 import SubmitConfirmationModal from './SubmitConfirmationModal';
 import '../AssessmentTest.css';
 
-const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onComplete, onExit }) => {
-  const [questions, setQuestions] = useState([]);
+const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onComplete, onExit, customQuestions }) => {
+  const [questions, setQuestions] = useState(customQuestions || []);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState({});
-  const [timeRemaining, setTimeRemaining] = useState(timeLimitMinutes * 60);
-  const [isLoading, setIsLoading] = useState(true);
+  const [timeRemaining, setTimeRemaining] = useState((timeLimitMinutes || 30) * 60);
+  const [isLoading, setIsLoading] = useState(!customQuestions || customQuestions.length === 0);
   const [error, setError] = useState(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const timerRef = useRef(null);
@@ -17,6 +17,16 @@ const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onC
 
   // Fetch questions
   useEffect(() => {
+    if (customQuestions && customQuestions.length > 0) {
+      setQuestions(customQuestions);
+      setCurrentIndex(0);
+      setSelectedAnswers({});
+      setTimeRemaining((timeLimitMinutes || 30) * 60);
+      setIsLoading(false);
+      startTimeRef.current = Date.now();
+      return;
+    }
+
     const loadQuestions = async () => {
       try {
         setIsLoading(true);
@@ -45,7 +55,7 @@ const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onC
         setQuestions(data);
         setCurrentIndex(0);
         setSelectedAnswers({});
-        setTimeRemaining(timeLimitMinutes * 60);
+        setTimeRemaining((timeLimitMinutes || 30) * 60);
 
         // Start the timer only after questions are loaded
         startTimeRef.current = Date.now();
@@ -59,7 +69,7 @@ const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onC
     };
 
     loadQuestions();
-  }, [stage, questionCount, timeLimitMinutes]);
+  }, [stage, questionCount, timeLimitMinutes, customQuestions]);
 
   // Timer countdown
   useEffect(() => {
@@ -117,7 +127,9 @@ const GenericTestUI = ({ stage, stageLabel, questionCount, timeLimitMinutes, onC
       timeTaken,
       correctCount,
       incorrectCount,
-      unansweredCount
+      unansweredCount,
+      questions,
+      selectedAnswers
     });
   };
 

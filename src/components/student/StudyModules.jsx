@@ -1,3 +1,4 @@
+'use client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BookOpen, 
@@ -166,6 +167,91 @@ const StudyModules = () => {
       return topicMatches && searchMatches;
     });
   }, [modules, selectedTopic, searchQuery]);
+
+  // Keydown protection to disable saving/printing when viewing protected document
+  useEffect(() => {
+    if (!activeDocument) return;
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'p' || e.key === 'u' || e.key === 'S' || e.key === 'P' || e.key === 'U')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDocument]);
+
+  // Extract and decode document data
+  const docMeta = useMemo(() => {
+    if (!activeDocument) return {};
+    let fileData = activeDocument.fileData || null;
+    let fileName = activeDocument.fileName || null;
+    let fileType = activeDocument.fileType || null;
+    let fileSize = activeDocument.fileSize || null;
+    let cleanDescription = activeDocument.description || '';
+
+    if (typeof cleanDescription === 'string' && cleanDescription.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(cleanDescription);
+        fileData = fileData || parsed.file_data || null;
+        fileName = fileName || parsed.file_name || null;
+        fileType = fileType || parsed.file_type || null;
+        fileSize = fileSize || parsed.file_size || null;
+        cleanDescription = parsed.human_description || parsed.notes || '';
+      } catch (_) {
+        cleanDescription = '';
+      }
+    }
+
+    if (typeof activeDocument.rawDescription === 'string' && !fileData && activeDocument.rawDescription.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(activeDocument.rawDescription);
+        fileData = fileData || parsed.file_data || null;
+        fileName = fileName || parsed.file_name || null;
+        fileType = fileType || parsed.file_type || null;
+        fileSize = fileSize || parsed.file_size || null;
+      } catch (_) {}
+    }
+
+    const isPdf = Boolean(
+      (fileType && fileType.includes('pdf')) ||
+      (fileData && fileData.startsWith('data:application/pdf')) ||
+      (fileName && fileName.toLowerCase().endsWith('.pdf'))
+    );
+
+    const isImage = Boolean(
+      (fileType && fileType.startsWith('image/')) ||
+      (fileData && fileData.startsWith('data:image/')) ||
+      (fileName && /\.(png|jpe?g|webp|gif|svg)$/i.test(fileName))
+    );
+
+    const isText = Boolean(
+      (fileType && (fileType.startsWith('text/') || fileType.includes('json') || fileType.includes('javascript'))) ||
+      (fileName && /\.(txt|md|csv|json|js|py|html)$/i.test(fileName))
+    );
+
+    return { fileData, fileName, fileType, fileSize, cleanDescription, isPdf, isImage, isText };
+  }, [activeDocument]);
+
+  const decodeTextData = (dataUrl) => {
+    if (!dataUrl) return '';
+    try {
+      if (dataUrl.includes(',')) {
+        const parts = dataUrl.split(',');
+        if (parts[0].includes('base64')) {
+          return decodeURIComponent(escape(atob(parts[1])));
+        }
+        return decodeURIComponent(parts[1]);
+      }
+      return dataUrl;
+    } catch (_) {
+      try {
+        return atob(dataUrl.split(',')[1]);
+      } catch (e) {
+        return dataUrl;
+      }
+    }
+  };
 
   return (
     <main className="dashboard-content">
@@ -374,72 +460,156 @@ const StudyModules = () => {
                   <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '6px 0 8px 0' }}>
                     {activeDocument.title}
                   </h1>
-                  <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, margin: 0 }}>
-                    {activeDocument.description}
-                  </p>
+                  {docMeta.cleanDescription && (
+                    <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                      {docMeta.cleanDescription}
+                    </p>
+                  )}
 
                   <div style={{ display: 'flex', gap: '20px', marginTop: '14px', flexWrap: 'wrap', fontSize: '12px', color: '#64748B' }}>
                     <div>Subject Track: <strong style={{ color: '#1E293B' }}>{activeDocument.subject}</strong></div>
                     <div>Source: <strong style={{ color: '#1E293B' }}>Supabase study_module</strong></div>
                     <div>Uploaded: <strong style={{ color: '#1E293B' }}>{formatUploadDate(activeDocument.createdAt)}</strong></div>
+                    {docMeta.fileName && (
+                      <div>File: <strong style={{ color: '#1E293B' }}>{docMeta.fileName}</strong></div>
+                    )}
                   </div>
                 </div>
 
-                {/* Section 1: Curriculum Overview & Objectives */}
-                <div className="doc-section">
-                  <h4 className="doc-section-title">
-                    <BookOpen size={15} color="#2563EB" /> 1. Syllabus & Core Concept Breakdown
-                  </h4>
-                  <p className="doc-paragraph">
-                    This module provides direct coverage of topics assessed during preliminary placement aptitude tests and campus screening rounds:
-                  </p>
-                  
-                  {STUDY_DOCUMENT_CONTENT[activeDocument.id]?.syllabus ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {STUDY_DOCUMENT_CONTENT[activeDocument.id].syllabus.map((item, idx) => (
-                        <div key={idx} style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                          <strong style={{ fontSize: '13px', color: '#0F172A' }}>{idx + 1}. {item.topic}:</strong>
-                          <span style={{ fontSize: '13px', color: '#475569', marginLeft: '6px' }}>{item.details}</span>
+                {/* RENDER ACTUAL UPLOADED FILE IF AVAILABLE */}
+                {docMeta.fileData ? (
+                  <div className="doc-uploaded-viewer" onContextMenu={(e) => e.preventDefault()}>
+                    {docMeta.isPdf ? (
+                      <div className="doc-pdf-wrapper" style={{ width: '100%', position: 'relative' }}>
+                        <iframe
+                          src={`${docMeta.fileData}#toolbar=0&navpanes=0&scrollbar=1`}
+                          title={activeDocument.title}
+                          className="doc-pdf-iframe"
+                          style={{
+                            width: '100%',
+                            height: '680px',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px',
+                            backgroundColor: '#F8FAFC',
+                            display: 'block'
+                          }}
+                        />
+                      </div>
+                    ) : docMeta.isImage ? (
+                      <div style={{ textAlign: 'center', padding: '16px 0', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                        <img
+                          src={docMeta.fileData}
+                          alt={activeDocument.title}
+                          draggable="false"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '650px',
+                            objectFit: 'contain',
+                            borderRadius: '6px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            userSelect: 'none',
+                            pointerEvents: 'none'
+                          }}
+                        />
+                      </div>
+                    ) : docMeta.isText ? (
+                      <div style={{ position: 'relative' }}>
+                        <pre
+                          style={{
+                            background: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px',
+                            padding: '18px 20px',
+                            fontSize: '13.5px',
+                            lineHeight: 1.6,
+                            color: '#1E293B',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            maxHeight: '600px',
+                            overflowY: 'auto',
+                            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                            userSelect: 'none'
+                          }}
+                        >
+                          {decodeTextData(docMeta.fileData)}
+                        </pre>
+                      </div>
+                    ) : (
+                      <div className="doc-pdf-wrapper" style={{ width: '100%', position: 'relative' }}>
+                        <iframe
+                          src={`${docMeta.fileData}#toolbar=0&navpanes=0`}
+                          title={activeDocument.title}
+                          style={{
+                            width: '100%',
+                            height: '650px',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px',
+                            backgroundColor: '#F8FAFC',
+                            display: 'block'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Fallback Section 1: Curriculum Overview & Objectives */}
+                    <div className="doc-section">
+                      <h4 className="doc-section-title">
+                        <BookOpen size={15} color="#2563EB" /> 1. Syllabus & Core Concept Breakdown
+                      </h4>
+                      <p className="doc-paragraph">
+                        This module provides direct coverage of topics assessed during preliminary placement aptitude tests and campus screening rounds:
+                      </p>
+                      
+                      {STUDY_DOCUMENT_CONTENT[activeDocument.id]?.syllabus ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {STUDY_DOCUMENT_CONTENT[activeDocument.id].syllabus.map((item, idx) => (
+                            <div key={idx} style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                              <strong style={{ fontSize: '13px', color: '#0F172A' }}>{idx + 1}. {item.topic}:</strong>
+                              <span style={{ fontSize: '13px', color: '#475569', marginLeft: '6px' }}>{item.details}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <ul className="doc-key-points">
+                          <li>Fundamental theoretical concepts and practical derivations</li>
+                          <li>Standard industry screening patterns and multiple-choice question typologies</li>
+                          <li>Speed-solving heuristics tailored for timed campus examinations</li>
+                        </ul>
+                      )}
                     </div>
-                  ) : (
-                    <ul className="doc-key-points">
-                      <li>Fundamental theoretical concepts and practical derivations</li>
-                      <li>Standard industry screening patterns and multiple-choice question typologies</li>
-                      <li>Speed-solving heuristics tailored for timed campus examinations</li>
-                    </ul>
-                  )}
-                </div>
 
-                {/* Section 2: Key Formulas & Shortcuts */}
-                <div className="doc-section">
-                  <h4 className="doc-section-title">
-                    <Sparkles size={15} color="#2563EB" /> 2. High-Yield Shortcuts & Exam Rules
-                  </h4>
-                  <div className="doc-callout">
-                    <ul style={{ margin: 0, paddingLeft: '16px' }}>
-                      {(STUDY_DOCUMENT_CONTENT[activeDocument.id]?.shortcuts || [
-                        'Always cross-check unit dimensions and sign conventions',
-                        'Memorize primary conversion factors to save calculation time',
-                        'Use back-solving from provided answer choices when algebraic solving exceeds 90 seconds'
-                      ]).map((tip, idx) => (
-                        <li key={idx} style={{ marginBottom: idx === 2 ? 0 : '6px', fontSize: '13px' }}>{tip}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
+                    {/* Fallback Section 2: Key Formulas & Shortcuts */}
+                    <div className="doc-section">
+                      <h4 className="doc-section-title">
+                        <Sparkles size={15} color="#2563EB" /> 2. High-Yield Shortcuts & Exam Rules
+                      </h4>
+                      <div className="doc-callout">
+                        <ul style={{ margin: 0, paddingLeft: '16px' }}>
+                          {(STUDY_DOCUMENT_CONTENT[activeDocument.id]?.shortcuts || [
+                            'Always cross-check unit dimensions and sign conventions',
+                            'Memorize primary conversion factors to save calculation time',
+                            'Use back-solving from provided answer choices when algebraic solving exceeds 90 seconds'
+                          ]).map((tip, idx) => (
+                            <li key={idx} style={{ marginBottom: idx === 2 ? 0 : '6px', fontSize: '13px' }}>{tip}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
 
-                {/* Section 3: Placement Preparation Strategy */}
-                <div className="doc-section">
-                  <h4 className="doc-section-title">
-                    <Info size={15} color="#2563EB" /> 3. Recommended Study Strategy
-                  </h4>
-                  <p className="doc-paragraph">
-                    {STUDY_DOCUMENT_CONTENT[activeDocument.id]?.tips || 
-                      'Review the core theory above, solve benchmark practice sets, and review time-per-question metrics in your S-1 Readiness Dashboard.'}
-                  </p>
-                </div>
+                    {/* Fallback Section 3: Placement Preparation Strategy */}
+                    <div className="doc-section">
+                      <h4 className="doc-section-title">
+                        <Info size={15} color="#2563EB" /> 3. Recommended Study Strategy
+                      </h4>
+                      <p className="doc-paragraph">
+                        {STUDY_DOCUMENT_CONTENT[activeDocument.id]?.tips || 
+                          'Review the core theory above, solve benchmark practice sets, and review time-per-question metrics in your S-1 Readiness Dashboard.'}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
